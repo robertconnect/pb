@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+
+filename = sys.argv[1]
+filename_from = sys.argv[2]
+origin = sys.argv[3:]
+
+data_src = ""
+with open(filename, 'r') as f:
+    data_src = f.read()
+
+data_src = data_src.strip()
+
+data_add = ""
+if filename_from == "-":
+    data_add = origin[-1]
+    origin = origin[0:-1]
+else:
+    with open(filename_from, 'r') as ff:
+        data_add = ff.read()
+
+data = {}
+
+if data_src != "":
+    data = json.loads(data_src)
+
+data_r = data
+if len(origin) > 0:
+    for subkey in origin[:-1]:
+        if not subkey in data.keys():
+            data[subkey] = {}
+        data = data[subkey]
+    data[origin[-1]] = data_add
+
+with open(filename, 'w') as f:
+    f.write(json.dumps(data_r, indent=4))
+

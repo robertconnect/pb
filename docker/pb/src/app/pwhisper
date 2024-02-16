@@ -1,0 +1,148 @@
+#!/bin/bash
+
+# johnny's: uuidgen gpg awk curl tr bash jput grep jcat cut cat head env
+
+# https://api-reference.passbolt.com/
+# https://help.passbolt.com/api/authentication
+# https://help.passbolt.com/tech/auth
+
+#PWH=~/pwhisper
+PWH=$PWHISPER_HOME
+
+mkdir -p $PWH/tmp/gpg
+
+BOLT=$(head -1 $PWH/bolt)
+NAME=$(head -1 $PWH/name)
+#KID=$(head -1 $PWH/kid)
+GGG=$PWH/tmp/gpg
+COOKIE=$PWH/tmp/cookiejar
+chmod -R og-rwx $GGG
+
+
+if [[ ! -f $PWH/pfp ]]; then
+	( cd $PWD && gpg --show-keys pkey | grep "^ " | awk '{print $1}' >pfp )
+fi
+
+CTOKEN=$(cat $PWH/tmp/AUTH | head -1)
+
+noncemaker() {
+	#	openssl rand -hex 38
+	echo -en "gpgauthv1.3.0|36|`uuidgen`|gpgauthv1.3.0"
+}
+
+gi_listuids() {
+	gpg --homedir $GGG --batch --with-colons --list-public-keys 2>/dev/null | grep "^uid:" | cut -d ':' -f 8,10
+}
+
+gi_dec() {
+	gpg --homedir $GGG --batch --decrypt $1 > $2
+}
+
+if [[ -z $1 ]]; then
+	gi_listuids
+	exit 0
+fi
+
+
+
+
+if [[ $1 = "id" ]]; then
+	curl -s -b $COOKIE -X GET https://$BOLT/resources.json >$PWH/tmp/data-resources.json
+	/app/pwhisper-int $PWH/tmp/data-resources.json "$@"
+	exit 0
+fi
+
+if [[ $1 = "get" ]]; then
+	#curl -s -b $COOKIE -X GET https://$BOLT/resources.json >$PWH/tmp/data-resources.json
+	/app/pwhisper-int $PWH/tmp/data-resources.json "$@"
+	exit 0
+fi
+
+if [[ $1 = "username" ]]; then
+	REST=$(mktemp /tmp/pwhisper-XXXXXXXXX)
+	curl -s -b $COOKIE -X GET https://$BOLT/resources/$2.json >$REST
+	jcat $REST body username
+	rm -f $REST
+	exit 0
+fi
+
+if [[ $1 = "uri" ]]; then
+	REST=$(mktemp /tmp/pwhisper-XXXXXXXXX)
+	curl -s -b $COOKIE -X GET https://$BOLT/resources/$2.json >$REST
+	jcat $REST body uri
+	rm -f $REST
+	exit 0
+fi
+
+if [[ $1 = "password" ]]; then
+	REST=$(mktemp /tmp/pwhisper-XXXXXXXXX)
+	REST2=$(mktemp /tmp/pwhisper-XXXXXXXXX)
+	REST3=$(mktemp /tmp/pwhisper-XXXXXXXXX)
+	curl -s -b $COOKIE -X GET https://$BOLT/secrets/resource/$2.json >$REST
+	jcat $REST body data >$REST2
+	cat $REST2 | gpg --homedir $PWH/tmp/gpg --batch --trust-model always -d 1>$REST3 2>/dev/null
+	cat $REST3 | grep '"password":' >/dev/null 2>/dev/null
+	EC=$?
+	if [[ $EC = 0 ]]; then
+		jcat $REST3 password
+	else
+		cat $REST3
+	fi
+	rm -f $REST
+	rm -f $REST2
+	rm -f $REST3
+	exit 0
+fi
+
+if [[ $1 = auth ]]; then
+#if [[ ! -f $PWH/tmp/AUTH ]]; then
+
+
+	cat /dev/null >$COOKIE
+	curl -s https://$BOLT/auth/verify.json >$PWH/tmp/verify.json
+	jcat $PWH/tmp/verify.json body fingerprint >$PWH/tmp/fingerprint
+	jcat $PWH/tmp/verify.json body keydata >$PWH/tmp/keydata
+	touch $PWH/tmp/AUTH
+	NONCE0=`noncemaker`
+	echo -en "$NONCE0" >$PWH/tmp/nonce0
+	gpg --homedir $PWH/tmp/gpg --batch --trust-model always --import $PWH/pkey
+	gpg --homedir $PWH/tmp/gpg --batch --trust-model always --import $PWH/tmp/keydata 2>/dev/null
+	cat $PWH/tmp/nonce0 | gpg --batch --trust-model always --homedir $PWH/tmp/gpg --recipient $(cat $PWH/tmp/fingerprint) --encrypt -a > $PWH/tmp/nonce0.enc 2>/dev/null
+
+	echo "{}" >$PWH/tmp/auth-login-0.json
+	jput $PWH/tmp/auth-login-0.json - gpg_auth keyid $(cat $PWH/pfp)
+	jput $PWH/tmp/auth-login-0.json $PWH/tmp/nonce0.enc gpg_auth server_verify_token
+
+	curl -b $COOKIE -c $COOKIE -s -H "Content-Type: application/json" -D $PWH/tmp/auth-login-0.json.response.headers -X POST -d @$PWH/tmp/auth-login-0.json https://$BOLT/auth/login.json
+
+	cat $PWH/tmp/auth-login-0.json.response.headers | grep '^X-GPGAuth-Verify-Response:' | cut -d ' ' -f 2 | tr -d '\r' | tr -d '\n' > $PWH/tmp/nonce0.returned
+	confirm=$(shasum -ba256 $PWH/tmp/nonce0.returned $PWH/tmp/nonce0 | awk '{print $1}' | sort | uniq | wc -l | awk '{print $1}')
+
+	if [[ ! $confirm = 1 ]]; then
+		echo "nonce0 unconfirmed"
+		exit 1
+	fi
+
+	echo "{}" >$PWH/tmp/auth-login-1.json
+	jput $PWH/tmp/auth-login-1.json - gpg_auth keyid $(cat $PWH/pfp)
+	curl -b $COOKIE -c $COOKIE -s -H "Content-Type: application/json" -D $PWH/tmp/auth-login-1.json.response.headers -X POST -d @$PWH/tmp/auth-login-1.json https://$BOLT/auth/login.json
+
+	cat $PWH/tmp/auth-login-1.json.response.headers | grep '^X-GPGAuth-User-Auth-Token: ' | cut -d ' ' -f 2 | /usr/bin/env python3 -c 'import sys, urllib.parse;print(urllib.parse.unquote(sys.stdin.read()).replace("\\+", " "))' >$PWH/tmp/auth-login-1.json.token
+	gi_dec $PWH/tmp/auth-login-1.json.token $PWH/tmp/auth-login-1.json.token.dec
+
+	#TODO: verify format of .dec
+
+	echo "{}" >$PWH/tmp/auth-login-2.json
+	jput $PWH/tmp/auth-login-2.json - gpg_auth keyid $(cat $PWH/pfp)
+	jput $PWH/tmp/auth-login-2.json $PWH/tmp/auth-login-1.json.token.dec gpg_auth user_token_result
+	curl -b $COOKIE -c $COOKIE -s -H "Content-Type: application/json" -D $PWH/tmp/auth-login-2.json.response.headers -X POST -d @$PWH/tmp/auth-login-2.json https://$BOLT/auth/login.json
+
+	curl -b $COOKIE -c $COOKIE -s -D $PWH/tmp/getme.headers -X GET https://$BOLT/users/me.json
+
+	#X-CSRF-Token
+
+	cat $COOKIE | grep csrfToken | head -1 | awk '{print $7}' >$PWH/tmp/AUTH
+	exit 0
+	#rm -f $PWH/tmp/AUTH
+	#rm -fr $PWH/tmp/gpg
+fi

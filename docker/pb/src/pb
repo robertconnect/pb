@@ -1,0 +1,93 @@
+#!/bin/bash
+
+
+# passbolt unofficial bash/docker cli
+
+
+PBACTUAL="$HOME/pb"
+
+if [[ ! -z $PB ]]; then
+	PBACTUAL="$PB"
+fi
+
+export PBACTUAL
+
+if [[ -z $1 ]]; then
+	cat <<EOF
+=======================
+Passbolt Unofficial CLI
+=======================
+
+Synopsis:
+
+    pb [ -s | -a | -ls | -u RES | -p RES ]
+
+Requirements:
+
+    - Docker (Software) - Check if running 'docker version' works.
+      If not: Macos https://www.docker.com/get-started/ or under Linux
+      do something like 'apt install docker.io' with your favourite PM.
+    - Know your passbolt's URL (https://...)
+    - Know your passbolt profile's e-mail address or username
+    - Have your gpg-key as ASCII file *without* passphrase
+    - Think about WHERE (directory) you want to store your workspace
+
+Description:
+
+    Note: If you have exported a path to the env called 'PB'
+          it is going to be used as workspace for all files
+          and configuration. If \$PB is unset '~/pb' is assumed.
+
+    pb                 # Show this help
+    pb -s              # Setup
+    pb -a              # Authorize (requires a previous SETUP)
+    pb -ls             # List Rersources (requires a previous AUTHORIZE)
+    pb -u <res-ID>     # Get username (requires a previous AUTHORIZE)
+    pb -p <res-ID>     # Get password (requires a previous AUTHORIZE)
+
+Examples:
+
+EOF
+	exit 0
+fi
+
+
+if [[ $1 = "-s" ]]; then
+	docker pull rdsc22/pb:latest
+	exit 0
+fi
+
+if [[ $1 = "-a" ]]; then
+	( cd $PBACTUAL && docker run --rm -v `pwd`:/work -it rdsc22/pb /app/pwhisper auth )
+	exit 0
+fi
+
+if [[ $1 = "-ls" ]]; then
+	( cd $PBACTUAL && docker run --rm -v `pwd`:/work -it rdsc22/pb /app/pwhisper id "${@:2}" )
+	exit 0
+fi
+
+if [[ $1 = "-u" ]]; then
+	RES=$2
+	if [[ -z $RES ]]; then
+		echo "RESOURCE ID missing (run 'pb -u <some-fancy-uuid>')" 1>&2
+		exit 2
+	else
+		( cd $PBACTUAL && docker run --rm -v `pwd`:/work -it rdsc22/pb /app/pwhisper get "$RES" u | tr -d '\n' )
+	fi
+	exit 0
+fi
+
+if [[ $1 = "-p" ]]; then
+	RES=$2
+	if [[ -z $RES ]]; then
+		echo "RESOURCE ID missing (run 'pb -p <some-fancy-uuid>')" 1>&2
+		exit 2
+	else
+		( cd $PBACTUAL && docker run --rm -v `pwd`:/work -it rdsc22/pb /app/pwhisper get "$RES" p | tr -d '\n' )
+	fi
+	exit 0
+fi
+
+echo "Unkown command - $1" 1>&2
+exit 1

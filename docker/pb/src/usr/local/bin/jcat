@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+
+filename = sys.argv[1]
+origin = sys.argv[2:]
+
+with open(filename, 'r') as f:
+    data = json.loads(f.read())
+
+if len(origin) > 0:
+    for subkey in origin:
+        data = data[subkey]
+    sys.stdout.write(data)
+    sys.stdout.flush()

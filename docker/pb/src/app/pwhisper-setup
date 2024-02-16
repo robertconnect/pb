@@ -1,0 +1,37 @@
+#!/bin/bash
+
+
+if [[ ! -z "$(ls -A $PWHISPER_HOME)" ]]; then
+	echo "can run setup only in an empty directory EXIT 1" 1>&2
+	exit 1
+fi
+
+
+divi() {
+	echo "------------------------------"
+}
+
+
+divi
+echo "pwhisper setup"
+divi
+
+echo "passbolt's fqdn WITHOUT http..." >bolt
+if [[ ! -z "$PWHISPER_SETUP_BOLT" ]]; then
+	echo -n "$PWHISPER_SETUP_BOLT" >bolt
+fi
+
+echo "your gpg public key without encryption, ascii formatted" >pkey
+if [[ ! -z "$PWHISPER_SETUP_PKEY" ]]; then
+	echo -n "$PWHISPER_SETUP_PKEY" >pkey
+fi
+
+echo "your e-mail address" >name
+if [[ ! -z "$PWHISPER_SETUP_NAME" ]]; then
+	echo -n "$PWHISPER_SETUP_NAME" >name
+fi
+
+
+#
+#	echo "will whisper from $PWHISPER_HOME"
+#read

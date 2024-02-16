@@ -1,0 +1,114 @@
+#!/venv/bin/python
+
+
+import sys, json
+from pprint import pprint as PP
+import subprocess
+import rich
+
+
+cmd = sys.argv[2]
+jsonfilename = sys.argv[1]
+
+data = json.load(open(jsonfilename, 'r'))
+
+# PP(data)
+tbl = []
+
+results=[]
+match_parts = [x.upper() for x in sys.argv[3:]]
+
+get_o_id = ""
+get_o_name = ""
+get_o_username = ""
+get_o_uri = ""
+get_o_pass = ""
+
+for o in data["body"]:
+    combined = o["id"] + ' ' + o["name"] + ' ' + o["username"] + ' ' + o["uri"]
+    combined_u = combined.upper()
+    match_count = 0
+    if len(match_parts) > 0:
+        for mp in match_parts:
+            if combined_u.find(mp) >= 0:
+                match_count+=1
+
+    if match_count == len(match_parts):
+        results.append(combined)
+
+
+    o_id = o["id"]
+    o_name = o["name"]
+    o_username = o["username"]
+    o_uri = o["uri"]
+
+    if cmd == "get" and o_id == sys.argv[3]:
+        get_o_id = o_id
+        get_o_name = o_name
+        get_o_username = o_username
+        get_o_uri = o_uri
+
+
+    if o_id == None:
+        o_id = "-"
+    if o_name == None:
+        o_name = "-"
+    if o_username == None:
+        o_username = "-"
+    if o_uri == None:
+        o_uri = "-"
+
+    row = [o_id, o_name]
+    tbl.append(row)
+
+
+if cmd == "id":
+    for res in results:
+        print(res)
+
+if cmd == "get":
+    get_o_pass = subprocess.check_output("""/app/pwhisper password '%s'""" % get_o_id, shell=True, universal_newlines=True).strip().split("\n")[0].strip()
+    if sys.argv[4] == "u":
+        print("%s" % get_o_username)
+    else:
+        if sys.argv[4] == "p":
+            print("%s" % get_o_pass)
+        else:
+            print("o_id=%s" % get_o_id)
+            print("o_name=%s" % get_o_name)
+            print("o_username=%s" % get_o_username)
+            print("o_uri=%s" % get_o_uri)
+            print("o_pass=%s" % get_o_pass)
+
+
+#if len(sys.argv) > 3:
+#    sfilter = sys.argv[3].upper()
+#else:
+#    code, sfilter_ = D.inputbox(
+#        text="Filter resource names down to...",
+#        width=0
+#        )
+#    if code == D.OK:
+#        sfilter = sfilter_.upper()
+
+#tbl2 = tbl
+#if len(sfilter) > 0:
+#    tbl2 = []
+#    for row in tbl:
+#        if row[1].upper().find(sfilter) >= 0:
+#            tbl2.append(row)
+#
+#if len(tbl2) == 0:
+#    D.msgbox("no entry matched!")
+#    sys.exit(1)
+
+#code, tag = D.menu(
+#    text="select (filter=%s)" % sfilter,
+#    choices=tbl2,
+#    width=0
+#)
+#if code == D.OK:
+#    subprocess.check_output("""/bin/bash -c 'echo -en "pwhisper password %s" | pbcopy'""" % tag, shell=True, universal_newlines=True)
+#    D.msgbox(text="Copied ID '%s' to pastebin!" % tag, width=0)
+#
+#sys.exit(0)
