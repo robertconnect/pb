@@ -1,0 +1,17 @@
+#!/bin/bash
+
+
+pb -a 1>/dev/null 2>/dev/null
+T=$(mktemp /tmp/pb-XXXXXXXXXXXXXXXXX)
+pb -ls "$@" >$T
+L=$(wc -l $T | awk '{print $1}')
+
+echo "__ $L __"
+if [[ $L = 1 ]]; then
+	UUID=$(head -1 $T | cut -d ' ' -f 1)
+	echo "__ $UUID __"
+	pb -u "$UUID" | tr -d '\n' | tr -d '\r' | pbcopy
+	say -v sam "user copied"
+else
+	say -v sam "error"
+fi
